@@ -5642,6 +5642,22 @@ END NODES
 1498, 1770, 1439, 1438, 1766, 2454, 2123, 2122, 2450
 1499, 1688, 1771, 1767, 1687, 2372, 2455, 2451, 2371
 1500, 1771, 1772, 1768, 1767, 2455, 2456, 2452, 2451
+END CONNECTIVITY
+%END ELEMENTS
+
+%	ELEMENTS
+
+%       PARAMETERS, 8, 0, 1001
+%       Define element properties - the values are passed to user subroutine elstif in the order they are listed here
+%       For the example provided, the params are Youngs Modulus, Poissons ratio 
+        PROPERTIES
+         300.d0, 0.25d0
+        END PROPERTIES
+%     Define mass density (for explicity dynamics only)
+%       DENSITY, 10.d0
+%     Define element connectivity
+%     The element number (first number in the list) is optional, and is ignored in the code
+        CONNECTIVITY, hard
 1501, 1772, 1773, 1769, 1768, 2456, 2457, 2453, 2452
 1502, 1773, 1774, 1770, 1769, 2457, 2458, 2454, 2453
 1503, 1774, 1440, 1439, 1770, 2458, 2124, 2123, 2454
@@ -7230,7 +7246,7 @@ END MESH
 %       The HISTORY key defines a time history that can be applied to DOFs or distributed loads
         HISTORY, dof_history
           0.d0, 0.d0
-         10.d0, 0.1d0
+         10.d0, 0.2d0
         END HISTORY
 
         HISTORY, dload_history
@@ -7307,6 +7323,9 @@ END MESH
            bot, 2, VALUE,  0.d0
            left, 1, VALUE, 0.d0
            right, 1, HISTORY, dof_history
+%           bot, 2, VALUE,  0.d0
+%           left, 1, VALUE, 0.d0
+%           top, 3, HISTORY, dof_history
         END DEGREES OF FREEDOM
 
 
@@ -7387,7 +7406,7 @@ END MESH
 
 
          SOLVER, DIRECT, LINEAR
-
+%		  SOLVER, CONJUGATE, GRADIENT
 
 
          PRINT STATE, Output_files\contourplots.dat

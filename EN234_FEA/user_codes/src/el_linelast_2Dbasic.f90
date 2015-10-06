@@ -84,12 +84,17 @@ subroutine el_linelast_2dbasic(lmn, element_identifier, n_nodes, node_property_l
 
     element_residual = 0.d0
     element_stiffness = 0.d0
-    ! plane strain D matrix
     D = 0.d0
     E = element_properties(1)
     xnu = element_properties(2)
-    E = E*(1+2*xnu)/(1+xnu)**2
-    xnu = xnu/(1+xnu)
+
+    ! Plane strain: element_identifier == 101
+    ! Plane stress: element_identifier == 102
+    if (element_identifier == 102) then
+        E = E*(1+2*xnu)/(1+xnu)**2
+        xnu = xnu/(1+xnu)
+    endif
+
     d33 = 0.5D0*E/(1+xnu)
     d11 = (1.D0-xnu)*E/( (1+xnu)*(1-2.D0*xnu) )
     d12 = xnu*E/( (1+xnu)*(1-2.D0*xnu) )
@@ -203,12 +208,17 @@ subroutine el_linelast_2dbasic_dynamic(lmn, element_identifier, n_nodes, node_pr
     call initialize_integration_points(n_points, n_nodes, xi, w)
 
     element_residual = 0.d0
-	! plane strain D matrix
     D = 0.d0
     E = element_properties(1)
     xnu = element_properties(2)
-    E = E*(1+2*xnu)/(1+xnu)**2
-    xnu = xnu/(1+xnu)
+
+    ! Plane strain: element_identifier == 101
+    ! Plane stress: element_identifier == 102
+    if (element_identifier == 102) then
+        E = E*(1+2*xnu)/(1+xnu)**2
+        xnu = xnu/(1+xnu)
+    endif
+
     d33 = 0.5D0*E/(1+xnu)
     d11 = (1.D0-xnu)*E/( (1+xnu)*(1-2.D0*xnu) )
     d12 = xnu*E/( (1+xnu)*(1-2.D0*xnu) )
@@ -325,12 +335,17 @@ subroutine fieldvars_linelast_2dbasic(lmn, element_identifier, n_nodes, node_pro
     call initialize_integration_points(n_points, n_nodes, xi, w)
 
     nodal_fieldvariables = 0.d0
-    ! plane strain D matrix
     D = 0.d0
     E = element_properties(1)
     xnu = element_properties(2)
-    E = E*(1+2*xnu)/(1+xnu)**2
-    xnu = xnu/(1+xnu)
+
+    ! Plane strain: element_identifier == 101
+    ! Plane stress: element_identifier == 102
+    if (element_identifier == 102) then
+        E = E*(1+2*xnu)/(1+xnu)**2
+        xnu = xnu/(1+xnu)
+    endif
+
     d33 = 0.5D0*E/(1+xnu)
     d11 = (1.D0-xnu)*E/( (1+xnu)*(1-2.D0*xnu) )
     d12 = xnu*E/( (1+xnu)*(1-2.D0*xnu) )
@@ -352,20 +367,23 @@ subroutine fieldvars_linelast_2dbasic(lmn, element_identifier, n_nodes, node_pro
         B(3,2:2*n_nodes:2)   = dNdx(1:n_nodes,1)
 
         strain = matmul(B,dof_total)
-        e33 = 0
         dstrain = matmul(B,dof_increment)
         strain = strain + dstrain
         stress = matmul(D,strain+dstrain)
-        S33 = xnu*(stress(1)+stress(2))                     ! Plane strain problem S33 = xnu*( stress(1)+stress(2) )
-        p = ( (1+xnu)*(stress(1)+stress(2)) )/3.d0
-!        S33 = 0                                             ! Plane stress problem S33 = 0
-!        p = ( sum(stress(1:2)) + 0 )/3.d0
-        sdev = stress
-        sdev(1:3) = sdev(1:3)-p
-        ! Plane strain problem
-        smises = dsqrt( stress(1)**2+stress(2)**2+xnu*(xnu-1)*(stress(1)+stress(2))**2-stress(1)*stress(2)+3*stress(3)**2)
-        ! Plane stress problem
-!        smises = dsqrt( stress(1)**2+stress(2)**2-stress(1)*stress(2)+3*stress(3)**2)
+!        p = ( (1+xnu)*(stress(1)+stress(2)) )/3.d0
+!        sdev = stress
+!        sdev(1:3) = sdev(1:3)-p
+
+        if (element_identifier == 101) then
+            ! Plane strain problem
+            S33 = xnu*(stress(1)+stress(2))
+            smises = dsqrt( stress(1)**2+stress(2)**2+xnu*(xnu-1)*(stress(1)+stress(2))**2-stress(1)*stress(2)+3*stress(3)**2)
+        else if (element_identifier == 102) then
+            ! Plane stress problem
+            S33 = 0
+            smises = dsqrt( stress(1)**2+stress(2)**2-stress(1)*stress(2)+3*stress(3)**2)
+        endif
+
         ! In the code below the strcmp( string1, string2, nchar) function returns true if the first nchar characters in strings match
         do k = 1,n_field_variables
             if (strcmp(field_variable_names(k),'S11',3) ) then
@@ -380,13 +398,13 @@ subroutine fieldvars_linelast_2dbasic(lmn, element_identifier, n_nodes, node_pro
                 nodal_fieldvariables(k,1:n_nodes) = nodal_fieldvariables(k,1:n_nodes) + smises*N(1:n_nodes)*determinant*w(kint)
             else if (strcmp(field_variable_names(k),'e11',3) ) then
                 nodal_fieldvariables(k,1:n_nodes) = nodal_fieldvariables(k,1:n_nodes) + &
-                                                    & ( strain(1)+dstrain(1) )*N(1:n_nodes)*determinant*w(kint)
+                                                    & strain(1)*N(1:n_nodes)*determinant*w(kint)
             else if (strcmp(field_variable_names(k),'e22',3) ) then
                 nodal_fieldvariables(k,1:n_nodes) = nodal_fieldvariables(k,1:n_nodes) + &
-                                                    & ( strain(2)+dstrain(2) )*N(1:n_nodes)*determinant*w(kint)
+                                                    & strain(2)*N(1:n_nodes)*determinant*w(kint)
             else if (strcmp(field_variable_names(k),'e12',3) ) then
                 nodal_fieldvariables(k,1:n_nodes) = nodal_fieldvariables(k,1:n_nodes) + &
-                                                    & 0.5*( strain(3)+dstrain(3) )*N(1:n_nodes)*determinant*w(kint)
+                                                    & 0.5*strain(3)*N(1:n_nodes)*determinant*w(kint)
             endif
         end do
  

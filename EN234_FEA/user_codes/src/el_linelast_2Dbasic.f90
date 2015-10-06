@@ -75,10 +75,10 @@ subroutine el_linelast_2dbasic(lmn, element_identifier, n_nodes, node_property_l
     
     x = reshape(element_coords,(/2,length_coord_array/2/))
 
-    if (n_nodes == 3) n_points = 3
-    if (n_nodes == 6) n_points = 4
+    if (n_nodes == 3) n_points = 4
+    if (n_nodes == 6) n_points = 7
     if (n_nodes == 4) n_points = 4
-    if (n_nodes == 8) n_points = 4
+    if (n_nodes == 8) n_points = 9
 
     call initialize_integration_points(n_points, n_nodes, xi, w)
 
@@ -88,6 +88,8 @@ subroutine el_linelast_2dbasic(lmn, element_identifier, n_nodes, node_property_l
     D = 0.d0
     E = element_properties(1)
     xnu = element_properties(2)
+    E = E*(1+2*xnu)/(1+xnu)**2
+    xnu = xnu/(1+xnu)
     d33 = 0.5D0*E/(1+xnu)
     d11 = (1.D0-xnu)*E/( (1+xnu)*(1-2.D0*xnu) )
     d12 = xnu*E/( (1+xnu)*(1-2.D0*xnu) )
@@ -104,9 +106,9 @@ subroutine el_linelast_2dbasic(lmn, element_identifier, n_nodes, node_property_l
         dNdx(1:n_nodes,1:2) = matmul(dNdxi(1:n_nodes,1:2),dxidx)
         B = 0.d0
         B(1,1:2*n_nodes-1:2) = dNdx(1:n_nodes,1)
-        B(2,2:2*n_nodes-0:2) = dNdx(1:n_nodes,2)
+        B(2,2:2*n_nodes:2)   = dNdx(1:n_nodes,2)
         B(3,1:2*n_nodes-1:2) = dNdx(1:n_nodes,2)
-        B(3,2:2*n_nodes-0:2) = dNdx(1:n_nodes,1)
+        B(3,2:2*n_nodes:2)   = dNdx(1:n_nodes,1)
 
 
         strain = matmul(B,dof_total)
@@ -193,10 +195,10 @@ subroutine el_linelast_2dbasic_dynamic(lmn, element_identifier, n_nodes, node_pr
     
     x = reshape(element_coords,(/2,length_coord_array/2/))
 
-    if (n_nodes == 3) n_points = 3
-    if (n_nodes == 6) n_points = 4
+    if (n_nodes == 3) n_points = 4
+    if (n_nodes == 6) n_points = 7
     if (n_nodes == 4) n_points = 4
-    if (n_nodes == 8) n_points = 4
+    if (n_nodes == 8) n_points = 9
 
     call initialize_integration_points(n_points, n_nodes, xi, w)
 
@@ -205,6 +207,8 @@ subroutine el_linelast_2dbasic_dynamic(lmn, element_identifier, n_nodes, node_pr
     D = 0.d0
     E = element_properties(1)
     xnu = element_properties(2)
+    E = E*(1+2*xnu)/(1+xnu)**2
+    xnu = xnu/(1+xnu)
     d33 = 0.5D0*E/(1+xnu)
     d11 = (1.D0-xnu)*E/( (1+xnu)*(1-2.D0*xnu) )
     d12 = xnu*E/( (1+xnu)*(1-2.D0*xnu) )
@@ -221,9 +225,9 @@ subroutine el_linelast_2dbasic_dynamic(lmn, element_identifier, n_nodes, node_pr
         dNdx(1:n_nodes,1:2) = matmul(dNdxi(1:n_nodes,1:2),dxidx)
         B = 0.d0
         B(1,1:2*n_nodes-1:2) = dNdx(1:n_nodes,1)
-        B(2,2:2*n_nodes-0:2) = dNdx(1:n_nodes,2)
+        B(2,2:2*n_nodes:2)   = dNdx(1:n_nodes,2)
         B(3,1:2*n_nodes-1:2) = dNdx(1:n_nodes,2)
-        B(3,2:2*n_nodes-0:2) = dNdx(1:n_nodes,1)
+        B(3,2:2*n_nodes:2)   = dNdx(1:n_nodes,1)
 
         strain = matmul(B,dof_total)
         dstrain = matmul(B,dof_increment)
@@ -313,10 +317,10 @@ subroutine fieldvars_linelast_2dbasic(lmn, element_identifier, n_nodes, node_pro
 
     x = reshape(element_coords,(/2,length_coord_array/2/))
 
-    if (n_nodes == 3) n_points = 3
-    if (n_nodes == 6) n_points = 4
+    if (n_nodes == 3) n_points = 4
+    if (n_nodes == 6) n_points = 7
     if (n_nodes == 4) n_points = 4
-    if (n_nodes == 8) n_points = 4
+    if (n_nodes == 8) n_points = 9
 
     call initialize_integration_points(n_points, n_nodes, xi, w)
 
@@ -325,6 +329,8 @@ subroutine fieldvars_linelast_2dbasic(lmn, element_identifier, n_nodes, node_pro
     D = 0.d0
     E = element_properties(1)
     xnu = element_properties(2)
+    E = E*(1+2*xnu)/(1+xnu)**2
+    xnu = xnu/(1+xnu)
     d33 = 0.5D0*E/(1+xnu)
     d11 = (1.D0-xnu)*E/( (1+xnu)*(1-2.D0*xnu) )
     d12 = xnu*E/( (1+xnu)*(1-2.D0*xnu) )
@@ -373,12 +379,14 @@ subroutine fieldvars_linelast_2dbasic(lmn, element_identifier, n_nodes, node_pro
             else if (strcmp(field_variable_names(k),'SMISES',6) ) then
                 nodal_fieldvariables(k,1:n_nodes) = nodal_fieldvariables(k,1:n_nodes) + smises*N(1:n_nodes)*determinant*w(kint)
             else if (strcmp(field_variable_names(k),'e11',3) ) then
-                nodal_fieldvariables(k,1:n_nodes) = nodal_fieldvariables(k,1:n_nodes) + dstrain(1)*N(1:n_nodes)*determinant*w(kint)
+                nodal_fieldvariables(k,1:n_nodes) = nodal_fieldvariables(k,1:n_nodes) + &
+                                                    & ( strain(1)+dstrain(1) )*N(1:n_nodes)*determinant*w(kint)
             else if (strcmp(field_variable_names(k),'e22',3) ) then
-                nodal_fieldvariables(k,1:n_nodes) = nodal_fieldvariables(k,1:n_nodes) + dstrain(2)*N(1:n_nodes)*determinant*w(kint)
+                nodal_fieldvariables(k,1:n_nodes) = nodal_fieldvariables(k,1:n_nodes) + &
+                                                    & ( strain(2)+dstrain(2) )*N(1:n_nodes)*determinant*w(kint)
             else if (strcmp(field_variable_names(k),'e12',3) ) then
                 nodal_fieldvariables(k,1:n_nodes) = nodal_fieldvariables(k,1:n_nodes) + &
-                                                    & 0.5*dstrain(3)*N(1:n_nodes)*determinant*w(kint)
+                                                    & 0.5*( strain(3)+dstrain(3) )*N(1:n_nodes)*determinant*w(kint)
             endif
         end do
  

@@ -368,18 +368,15 @@ subroutine fieldvars_linelast_2dbasic(lmn, element_identifier, n_nodes, node_pro
 
         strain = matmul(B,dof_total)
         dstrain = matmul(B,dof_increment)
-        strain = strain + dstrain
         stress = matmul(D,strain+dstrain)
 !        p = ( (1+xnu)*(stress(1)+stress(2)) )/3.d0
 !        sdev = stress
 !        sdev(1:3) = sdev(1:3)-p
 
-        if (element_identifier == 101) then
-            ! Plane strain problem
+        if (element_identifier == 101) then             ! Plane strain problem
             S33 = xnu*(stress(1)+stress(2))
             smises = dsqrt( stress(1)**2+stress(2)**2+xnu*(xnu-1)*(stress(1)+stress(2))**2-stress(1)*stress(2)+3*stress(3)**2)
-        else if (element_identifier == 102) then
-            ! Plane stress problem
+        else if (element_identifier == 102) then        ! Plane stress problem
             S33 = 0
             smises = dsqrt( stress(1)**2+stress(2)**2-stress(1)*stress(2)+3*stress(3)**2)
         endif
@@ -398,13 +395,13 @@ subroutine fieldvars_linelast_2dbasic(lmn, element_identifier, n_nodes, node_pro
                 nodal_fieldvariables(k,1:n_nodes) = nodal_fieldvariables(k,1:n_nodes) + smises*N(1:n_nodes)*determinant*w(kint)
             else if (strcmp(field_variable_names(k),'e11',3) ) then
                 nodal_fieldvariables(k,1:n_nodes) = nodal_fieldvariables(k,1:n_nodes) + &
-                                                    & strain(1)*N(1:n_nodes)*determinant*w(kint)
+                                                    & (strain(1)+dstrain(1))*N(1:n_nodes)*determinant*w(kint)
             else if (strcmp(field_variable_names(k),'e22',3) ) then
                 nodal_fieldvariables(k,1:n_nodes) = nodal_fieldvariables(k,1:n_nodes) + &
-                                                    & strain(2)*N(1:n_nodes)*determinant*w(kint)
+                                                    & (strain(2)+dstrain(2))*N(1:n_nodes)*determinant*w(kint)
             else if (strcmp(field_variable_names(k),'e12',3) ) then
                 nodal_fieldvariables(k,1:n_nodes) = nodal_fieldvariables(k,1:n_nodes) + &
-                                                    & 0.5*strain(3)*N(1:n_nodes)*determinant*w(kint)
+                                                    & 0.5*(strain(3)+dstrain(3))*N(1:n_nodes)*determinant*w(kint)
             endif
         end do
  

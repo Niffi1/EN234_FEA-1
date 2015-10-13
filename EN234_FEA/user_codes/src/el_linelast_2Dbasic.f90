@@ -76,7 +76,7 @@ subroutine el_linelast_2dbasic(lmn, element_identifier, n_nodes, node_property_l
     x = reshape(element_coords,(/2,length_coord_array/2/))
 
     if (n_nodes == 3) n_points = 4
-    if (n_nodes == 6) n_points = 7
+    if (n_nodes == 6) n_points = 4
     if (n_nodes == 4) n_points = 4
     if (n_nodes == 8) n_points = 9
 
@@ -201,7 +201,7 @@ subroutine el_linelast_2dbasic_dynamic(lmn, element_identifier, n_nodes, node_pr
     x = reshape(element_coords,(/2,length_coord_array/2/))
 
     if (n_nodes == 3) n_points = 4
-    if (n_nodes == 6) n_points = 7
+    if (n_nodes == 6) n_points = 4
     if (n_nodes == 4) n_points = 4
     if (n_nodes == 8) n_points = 9
 
@@ -328,7 +328,7 @@ subroutine fieldvars_linelast_2dbasic(lmn, element_identifier, n_nodes, node_pro
     x = reshape(element_coords,(/2,length_coord_array/2/))
 
     if (n_nodes == 3) n_points = 4
-    if (n_nodes == 6) n_points = 7
+    if (n_nodes == 6) n_points = 4
     if (n_nodes == 4) n_points = 4
     if (n_nodes == 8) n_points = 9
 

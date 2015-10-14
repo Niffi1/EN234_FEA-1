@@ -29,7 +29,7 @@ subroutine user_print(n_steps)
 !
 !
     ! compute the J-integral
-    call compute_J_integral(J_integral_value)
+    call compute_J_integral(J_integral_value, sed, q_1, q_2, u1_2, u2_2)
     write(user_print_units(1),'(A)') 'The J integral value'
     write(user_print_units(1),'(D12.5)') J_integral_value
 !    call compute_J_integral(J_integral_value, sed, q_1, q_2, u1_2, u2_2)
@@ -284,7 +284,7 @@ subroutine compute_J_integral(J_integral_value, sed, q_1, q_2, u1_2, u2_2)
     real( prec ), allocatable   :: x(:,:)                                  ! Nodal coords x(i,a) is ith coord of ath node
     real( prec ), allocatable   :: dof_increment(:)                        ! DOF increment, using usual element storage convention
     real( prec ), allocatable   :: dof_total(:)                            ! accumulated DOF, using usual element storage convention
-
+    real( prec ), allocatable   :: dof_updated_total(:)
     real (prec), allocatable  ::  B(:,:)                                   ! strain = B*(dof_total+dof_increment)
     !
     !
@@ -299,6 +299,7 @@ subroutine compute_J_integral(J_integral_value, sed, q_1, q_2, u1_2, u2_2)
     allocate(x(2,length_coord_array/2), stat=status)
     allocate(dof_increment(length_dof_array), stat=status)
     allocate(dof_total(length_dof_array), stat=status)
+    allocate(dof_updated_total(length_dof_array), stat=status)
     allocate(B(3,length_dof_array), stat=status)
 
   !  Write your code to calculate the J integral here
@@ -363,6 +364,7 @@ subroutine compute_J_integral(J_integral_value, sed, q_1, q_2, u1_2, u2_2)
 
         strain = matmul(B,dof_total)
         dstrain = matmul(B,dof_increment)
+        dof_updated_total = dof_total + dof_increment
         strain = strain + dstrain
         stress = matmul(D,strain)
 
@@ -373,8 +375,8 @@ subroutine compute_J_integral(J_integral_value, sed, q_1, q_2, u1_2, u2_2)
         do i = 1, n_nodes
             x1 = x1 + N(i)*x(1,i)
             x2 = x2 + N(i)*x(2,i)
-            u1_2 = u1_2 + dNdx(i,2)*dof_total(2*i-1)
-            u2_2 = u2_2 + dNdx(i,2)*dof_total(2*i)
+            u1_2 = u1_2 + dNdx(i,2)*dof_updated_total(2*i-1)
+            u2_2 = u2_2 + dNdx(i,2)*dof_updated_total(2*i)
         end do
 
         r0 = 0.0006D0

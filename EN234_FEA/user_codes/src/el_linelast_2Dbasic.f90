@@ -91,13 +91,13 @@ subroutine el_linelast_2dbasic(lmn, element_identifier, n_nodes, node_property_l
     ! Plane strain: element_identifier == 101
     ! Plane stress: element_identifier == 102
     if (element_identifier == 102) then
-        E = E*(1+2*xnu)/(1+xnu)**2
-        xnu = xnu/(1+xnu)
+        E = E*(1.D0+2.D0*xnu)/(1+xnu)**2
+        xnu = xnu/(1.D0+xnu)
     endif
 
-    d33 = 0.5D0*E/(1+xnu)
-    d11 = (1.D0-xnu)*E/( (1+xnu)*(1-2.D0*xnu) )
-    d12 = xnu*E/( (1+xnu)*(1-2.D0*xnu) )
+    d33 = 0.5D0*E/(1.D0+xnu)
+    d11 = (1.D0-xnu)*E/( (1.D0+xnu)*(1.D0-2.D0*xnu) )
+    d12 = xnu*E/( (1.D0+xnu)*(1.D0-2.D0*xnu) )
     D(1:2,1:2) = d12
     D(1,1) = d11
     D(2,2) = d11
@@ -215,13 +215,13 @@ subroutine el_linelast_2dbasic_dynamic(lmn, element_identifier, n_nodes, node_pr
     ! Plane strain: element_identifier == 101
     ! Plane stress: element_identifier == 102
     if (element_identifier == 102) then
-        E = E*(1+2*xnu)/(1+xnu)**2
-        xnu = xnu/(1+xnu)
+        E = E*(1.D0+2.D0*xnu)/(1.D0+xnu)**2
+        xnu = xnu/(1.D0+xnu)
     endif
 
-    d33 = 0.5D0*E/(1+xnu)
-    d11 = (1.D0-xnu)*E/( (1+xnu)*(1-2.D0*xnu) )
-    d12 = xnu*E/( (1+xnu)*(1-2.D0*xnu) )
+    d33 = 0.5D0*E/(1.D0+xnu)
+    d11 = (1.D0-xnu)*E/( (1.D0+xnu)*(1.D0-2.D0*xnu) )
+    d12 = xnu*E/( (1.D0+xnu)*(1.D0-2.D0*xnu) )
     D(1:2,1:2) = d12
     D(1,1) = d11
     D(2,2) = d11
@@ -342,13 +342,13 @@ subroutine fieldvars_linelast_2dbasic(lmn, element_identifier, n_nodes, node_pro
     ! Plane strain: element_identifier == 101
     ! Plane stress: element_identifier == 102
     if (element_identifier == 102) then
-        E = E*(1+2*xnu)/(1+xnu)**2
-        xnu = xnu/(1+xnu)
+        E = E*(1.D0+2.D0*xnu)/(1.D0+xnu)**2
+        xnu = xnu/(1.D0+xnu)
     endif
 
-    d33 = 0.5D0*E/(1+xnu)
-    d11 = (1.D0-xnu)*E/( (1+xnu)*(1-2.D0*xnu) )
-    d12 = xnu*E/( (1+xnu)*(1-2.D0*xnu) )
+    d33 = 0.5D0*E/(1.D0+xnu)
+    d11 = (1.D0-xnu)*E/( (1.D0+xnu)*(1.D0-2.D0*xnu) )
+    d12 = xnu*E/( (1.D0+xnu)*(1.D0-2.D0*xnu) )
     D(1:2,1:2) = d12
     D(1,1) = d11
     D(2,2) = d11
@@ -375,9 +375,9 @@ subroutine fieldvars_linelast_2dbasic(lmn, element_identifier, n_nodes, node_pro
 
         if (element_identifier == 101) then             ! Plane strain problem
             S33 = xnu*(stress(1)+stress(2))
-            smises = dsqrt( stress(1)**2+stress(2)**2+xnu*(xnu-1)*(stress(1)+stress(2))**2-stress(1)*stress(2)+3*stress(3)**2)
+            smises = dsqrt( stress(1)**2+stress(2)**2+xnu*(xnu-1.D0)*(stress(1)+stress(2))**2-stress(1)*stress(2)+3*stress(3)**2)
         else if (element_identifier == 102) then        ! Plane stress problem
-            S33 = 0
+            S33 = 0.D0
             smises = dsqrt( stress(1)**2+stress(2)**2-stress(1)*stress(2)+3*stress(3)**2)
         endif
 
@@ -401,7 +401,7 @@ subroutine fieldvars_linelast_2dbasic(lmn, element_identifier, n_nodes, node_pro
                                                     & (strain(2)+dstrain(2))*N(1:n_nodes)*determinant*w(kint)
             else if (strcmp(field_variable_names(k),'e12',3) ) then
                 nodal_fieldvariables(k,1:n_nodes) = nodal_fieldvariables(k,1:n_nodes) + &
-                                                    & 0.5*(strain(3)+dstrain(3))*N(1:n_nodes)*determinant*w(kint)
+                                                    & 0.5D0*(strain(3)+dstrain(3))*N(1:n_nodes)*determinant*w(kint)
             endif
         end do
  

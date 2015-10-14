@@ -17,7 +17,7 @@ subroutine user_print(n_steps)
   integer ::  n_state_vars_per_intpt                                         ! No. state variables per integration point
   real (prec) ::   vol_averaged_strain(6)                                    ! Volume averaged strain in an element
   real (prec), allocatable ::   vol_averaged_state_variables(:)              ! Volume averaged state variables in an element
-  real (prec) ::  J_integral_value
+  real (prec) ::  J_integral_value, sed, q_1, q_2, u1_2, u2_2
 
 
 !
@@ -30,9 +30,11 @@ subroutine user_print(n_steps)
 !
     ! compute the J-integral
     call compute_J_integral(J_integral_value)
-    write(user_print_units(1),'(A)') 'The J integral value:'
+    write(user_print_units(1),'(A)') 'The J integral value'
     write(user_print_units(1),'(D12.5)') J_integral_value
-
+!    call compute_J_integral(J_integral_value, sed, q_1, q_2, u1_2, u2_2)
+!    write(user_print_units(1),'(A)') 'The J integral value, sed, q_1, q_2, u1_2, u2_2'
+!    write(user_print_units(1),'(D12.5)') J_integral_value, sed, q_1, q_2, u1_2, u2_2
 
 
 !   allocate(vol_averaged_state_variables(length_state_variable_array), stat=status)
@@ -224,7 +226,7 @@ subroutine compute_element_volume_average_3D(lmn,vol_averaged_strain,vol_average
 
 end subroutine compute_element_volume_average_3D
 
-subroutine compute_J_integral(J_integral_value)
+subroutine compute_J_integral(J_integral_value, sed, q_1, q_2, u1_2, u2_2)
     use Types
     use ParamIO
     use Mesh, only : extract_element_data
@@ -270,7 +272,7 @@ subroutine compute_J_integral(J_integral_value)
     real (prec)  ::  dxidx(2,2), determinant           ! Jacobian inverse and determinant
 !    real (prec)  ::  x(2,length_coord_array/2)         ! Re-shaped coordinate array x(i,a) is ith coord of ath node
     real (prec)  ::  E, xnu, d33, d11, d12             ! Material properties
-    real (prec)  ::  q_1, q_2, x1, x2, u1_2, u2_2
+    real (prec)  ::  sed, r0, q_1, q_2, x1, x2, u1_2, u2_2
 !   The arrays below have to be given dimensions large enough to store the data. It doesnt matter if they are too large.
 
     integer, allocatable    :: node_list(:)                                ! List of nodes on the element (connectivity)
@@ -307,15 +309,18 @@ subroutine compute_J_integral(J_integral_value)
     lmn_start = zone_list(2)%start_element
     lmn_end = zone_list(2)%end_element
 
-    J_integral_value = 0.
+    J_integral_value = 0.D0
 
   !loop over the crack tip elements
-    do lmn = lmn_start,lmn_end
+    do lmn = lmn_start, lmn_end
 
   ! The two subroutines below extract data for elements and nodes (see module Mesh.f90 for the source code for these subroutines)
 
     call extract_element_data(lmn,element_identifier,n_nodes,node_list,n_properties,element_properties, &
                                             n_state_variables,initial_state_variables,updated_state_variables)
+    if (n_nodes == 6) n_points = 4
+    if (n_nodes == 8) n_points = 9
+    call initialize_integration_points(n_points, n_nodes, xi, w)
 
     do i = 1, n_nodes
         iof = 2*(i-1)+1     ! Points to first DOF for the node in the dof_increment and dof_total arrays
@@ -323,10 +328,6 @@ subroutine compute_J_integral(J_integral_value)
                                                  dof_increment(iof:iof+1),dof_total(iof:iof+1))
     end do
 
-    if (n_nodes == 6) n_points = 4
-    if (n_nodes == 8) n_points = 9
-
-    call initialize_integration_points(n_points, n_nodes, xi, w)
 
     D = 0.d0
     E = element_properties(1)
@@ -348,7 +349,7 @@ subroutine compute_J_integral(J_integral_value)
     D(3,3) = d33
 
     ! loop over the integration points
-    do kint = 1,n_points
+    do kint = 1, n_points
 
         call calculate_shapefunctions(xi(1:2,kint),n_nodes,N,dNdxi)
         dxdxi = matmul(x(1:2,1:n_nodes),dNdxi(1:n_nodes,1:2))
@@ -365,10 +366,10 @@ subroutine compute_J_integral(J_integral_value)
         strain = strain + dstrain
         stress = matmul(D,strain)
 
-        x1 = 0.
-        x2 = 0.
-        u1_2 = 0.
-        u2_2 = 0.
+        x1 = 0.D0
+        x2 = 0.D0
+        u1_2 = 0.D0
+        u2_2 = 0.D0
         do i = 1, n_nodes
             x1 = x1 + N(i)*x(1,i)
             x2 = x2 + N(i)*x(2,i)
@@ -376,19 +377,18 @@ subroutine compute_J_integral(J_integral_value)
             u2_2 = u2_2 + dNdx(i,2)*dof_total(2*i)
         end do
 
-        q_1 = -x1/dsqrt(x1*x1 + x2*x2)/0.0006D0
-        q_2 = -x2/dsqrt(x1*x1 + x2*x2)/0.0006D0
+        r0 = 0.0006D0
+        q_1 = -x1/dsqrt(x1*x1 + x2*x2)/r0
+        q_2 = -x2/dsqrt(x1*x1 + x2*x2)/r0
+        sed = 0.5D0*( stress(1)*strain(1) + stress(2)*strain(2) + stress(3)*strain(3) )
 
         J_integral_value = J_integral_value + ( ( stress(1)*u1_2 + stress(3)*u2_2 )*q_1 &
-                            + ( stress(3)*u1_2 + stress(2)*u2_2 &
-                            - 0.5*( stress(1)*strain(1) + stress(2)*strain(2) + stress(3)*strain(3) ) )*q_2 )&
-                            *w(kint)*determinant
-
-
+                            + ( stress(3)*u1_2 + stress(2)*u2_2 - sed )*q_2 )*w(kint)*determinant
     end do
 
     end do
 
+!   write(*,*) determinant
 
     deallocate(node_list)
     deallocate(element_properties)

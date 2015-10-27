@@ -70,6 +70,8 @@ subroutine user_print(n_steps)
 
 end subroutine user_print
 
+
+!==================================== element_volume_average_3D ===============================================
 subroutine compute_element_volume_average_3D(lmn,vol_averaged_strain,vol_averaged_state_vars,length_output_array, &
                                                                                                        n_state_vars_per_intpt)
     use Types
@@ -221,11 +223,10 @@ subroutine compute_element_volume_average_3D(lmn,vol_averaged_strain,vol_average
 
     return
 
-
-
-
 end subroutine compute_element_volume_average_3D
 
+
+!========================== J integral ==================================
 subroutine compute_J_integral(J_integral_value, sed, q_1, q_2, u1_2, u2_2)
     use Types
     use ParamIO
@@ -401,10 +402,6 @@ subroutine compute_J_integral(J_integral_value, sed, q_1, q_2, u1_2, u2_2)
     deallocate(dof_total)
     deallocate(B)
 
-
     return
-
-
-
 
 end subroutine compute_J_integral

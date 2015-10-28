@@ -73,6 +73,7 @@ subroutine el_hypoelast_3dbasic(lmn, element_identifier, n_nodes, node_property_
     real (prec)  ::  el_vol          ! element volume
     real (prec)  ::  B_bar(6,length_dof_array), tempmatrix(6,length_dof_array)
 
+
     fail = .false.
     
     x = reshape(element_coords,(/3,length_coord_array/3/))
@@ -135,12 +136,13 @@ subroutine el_hypoelast_3dbasic(lmn, element_identifier, n_nodes, node_property_
         end do
 
         B_bar = B + 1.D0/3.D0*tempmatrix
-
         strain = matmul(B_bar,dof_total)
         dstrain = matmul(B_bar,dof_increment)
         strain = strain + dstrain
+
         call mat_stiffness_3d(s0, e0, n0, K0, strain, stress, D)
 !        stress = matmul(D,strain)
+
 
         element_residual(1:3*n_nodes) = element_residual(1:3*n_nodes) - matmul(transpose(B_bar),stress)*w(kint)*determinant
         element_stiffness(1:3*n_nodes,1:3*n_nodes) = element_stiffness(1:3*n_nodes,1:3*n_nodes) &
@@ -163,9 +165,9 @@ subroutine fieldvars_hypoelast_3dbasic(lmn, element_identifier, n_nodes, node_pr
     use ParamIO
     use Mesh, only : node
     use Element_Utilities, only : N => shape_functions_3D
-    use Element_Utilities, only: dNdxi => shape_function_derivatives_3D
-    use Element_Utilities, only: dNdx => shape_function_spatial_derivatives_3D
-    use Element_Utilities, only: dNbardx => vol_avg_shape_function_derivatives_3D
+    use Element_Utilities, only : dNdxi => shape_function_derivatives_3D
+    use Element_Utilities, only : dNdx => shape_function_spatial_derivatives_3D
+    use Element_Utilities, only : dNbardx => vol_avg_shape_function_derivatives_3D
     use Element_Utilities, only : xi => integrationpoints_3D, w => integrationweights_3D
     use Element_Utilities, only : dxdxi => jacobian_3D
     use Element_Utilities, only : initialize_integration_points
@@ -343,44 +345,41 @@ subroutine mat_stiffness_3d(s0, e0, n0, K0, strain, stress, D)
     real (kind=8) ::  stress(6)                          ! Stress vector contains [s11, s22, s33, s12, s13, s23]
     real (kind=8) ::  D(6,6)                             ! the material tangent stiffness matrix
     real (kind=8) ::  e_dyadic_e(6,6), mat1(6,6), mat2(6,6)
-    real (kind=8) ::  se, ee, dsde, e_kk
+    real (kind=8) ::  se, ee, Et, Es, e_kk, e_mag
     integer ::  i, j
 
     ! variable initiation
     ee = 0.D0
     se = 0.D0
-    dsde = 0.D0
+    Et = 0.D0
+    Es = 0.D0
     e_kk = 0.D0
+    e_mag = 0.D0
+    ! find the magnitude of strain
+    e_mag = strain(1)**2 + strain(2)**2 + strain(3)**2 + 2.D0*( strain(4)**2 + strain(5)**2 + strain(6)**2 )
+    e_mag = dsqrt(e_mag)
     ! find deviation strain
     e_kk = strain(1) + strain(2) + strain(3)
-    do i = 1, 3
-        dev_strain(i) = strain(i) - e_kk/3.D0
-        dev_strain(i+3) = strain(i+3)/2.D0
-    end do
+    dev_strain(1:3) = strain(1:3) - e_kk/3.D0
+    dev_strain(4:6) = strain(4:6)/2.D0
     ! find equiv. strain
     ee = dev_strain(1)**2 + dev_strain(2)**2 + dev_strain(3)**2
     ee = ee + 2.D0*( dev_strain(4)**2 + dev_strain(5)**2 + dev_strain(6)**2 )
     ee = dsqrt( 2.D0*ee/3.D0 )
-    ! find equiv. stress
+    ! find equiv. stress and the uniaxial tangent
     if (ee .le. e0) then
         se = (1.D0+n0**2)/(n0-1.D0)**2 - ( n0/(n0-1.D0) - ee/e0 )**2
         se = s0*( dsqrt(se) - 1.D0/(n0-1) )
+        Et = s0*( n0/(n0-1.D0) - ee/e0 )/e0
+        Et = Et/dsqrt( (1.D0+n0**2)/(n0-1.D0)**2 - ( n0/(n0-1.D0) - ee/e0 )**2 )
     else
         se = s0*( (ee/e0)**(1.D0/n0) )
+        Et = s0*( (ee/e0)**(1.D0/n0) )/(n0*ee)
     end if
-    ! find uniaxial tangent
-    if (ee .le. e0) then
-        if (n0-1 .le. 1.0D-12) then
-            dsde = s0/e0
-        else
-            dsde = s0*( n0/(n0-1.D0) -ee/e0 )/e0
-            dsde = dsde/dsqrt( (1.D0+n0**2)/(n0-1.D0)**2 - ( -n0/(n0-1.D0) - ee/e0 )**2 )
-        end if
-    else
-        dsde = s0*( (ee/e0)**(1.D0/n0) )/(n0*ee)
-    end if
-    ! find the tangent stiffness
+
+    ! find the tangent stiffness and stress
     D = 0.D0
+    stress = 0.D0
     e_dyadic_e = 0.D0
     mat1 = 0.D0
     mat2 = 0.D0
@@ -392,16 +391,15 @@ subroutine mat_stiffness_3d(s0, e0, n0, K0, strain, stress, D)
         end do
     enddo
     e_dyadic_e = spread(dev_strain,dim=2,ncopies=6)*spread(dev_strain,dim=1,ncopies=6)
-    if (ee .ge. 0) then
-        D = se/ee/3.D0*mat1 + (K0-2.D0*se/ee/9.D0)*mat2 + 4*(dsde-se/ee)/(9*ee**2)*e_dyadic_e
+    if (e_mag .gt. 1.0D-25) then
+        Es = se/ee
+        D = Es/3.D0*mat1 + (K0-2.D0*Es/9.D0)*mat2 + 4*(Et-Es)/9/(ee**2)*e_dyadic_e
+        stress(1:3) = 2.D0*se*dev_strain(1:3)/3/ee + K0*e_kk
+        stress(4:6) = 2.D0*se*dev_strain(4:6)/3/ee
     else
-        D = dsde/3.D0*mat1 + (K0-2.D0*dsde/9.D0)*mat2
+        D = Et/3.D0*mat1 + (K0-2.D0*Et/9.D0)*mat2
+        stress = 0
     end if
-    ! find the stress
-    do i = 1, 3
-        stress(i) = 2.D0*se*dev_strain(i)/3/ee + K0*e_kk
-        stress(i+3) = 2.D0*se*dev_strain(i+3)/3/ee
-    end do
 
 end subroutine mat_stiffness_3d
 

@@ -83,6 +83,7 @@ subroutine el_hyperelast_3dbasic(lmn, element_identifier, n_nodes, node_property
     fail = .false.
     
     x = reshape(element_coords,(/3,length_coord_array/3/))
+    total_dof = 0.D0
     total_dof = transpose( reshape( dof_total + dof_increment, (/ 3, length_coord_array/3 /) ) )
     delta = reshape((/ 1.D0, 0.D0, 0.D0, 0.D0, 1.D0, 0.D0, 0.D0, 0.D0, 1.D0 /), shape(delta))
 
@@ -107,6 +108,9 @@ subroutine el_hyperelast_3dbasic(lmn, element_identifier, n_nodes, node_property
         D = 0.d0
         F = 0.D0
         tempmat1 = 0.D0
+        tempmat2 = 0.D0
+        tempmat3 = 0.D0
+        tempmat4 = 0.D0
         ! find deformation gradient F
         do ii = 1, 3
             do jj = 1, 3
@@ -114,9 +118,9 @@ subroutine el_hyperelast_3dbasic(lmn, element_identifier, n_nodes, node_property
                     F(ii,jj) = F(ii,jj) + total_dof(kk,ii)*dNdx(kk,jj)
                 end do
                 F(ii,jj) = F(ii,jj) + delta(ii,jj)
-                tempmat1(ii,jj) = 1.D0
-                tempmat1(ii+3,jj+3) = 0.5D0
             end do
+            tempmat1(ii,ii) = 1.D0
+            tempmat1(ii+3,ii+3) = 0.5D0
         enddo
         lB = matmul(F,transpose(F))
         BVec = (/ lB(1,1), lB(2,2), lB(3,3), lB(1,2), lB(1,3), lB(2,3) /)
@@ -128,7 +132,7 @@ subroutine el_hyperelast_3dbasic(lmn, element_identifier, n_nodes, node_property
         tempmat4 = spread(BVec,dim=2,ncopies=6)*spread(BVecInv,dim=1,ncopies=6)
         call invert_small(F,FInv,J)
         D = mu1*J**(-2.D0/3)*tempmat1 + K1*J*(J-0.5D0)*tempmat2
-        D = D + mu1*J**(-2.D0/3)*( (BVec(1)+BVec(2)+BVec(3))/3.D0*tempmat2 - tempmat3 - tempmat4 )/3.D0
+        D = D + mu1*J**(-2.D0/3)/3.D0*( (BVec(1)+BVec(2)+BVec(3))/3.D0*tempmat2 - tempmat3 - tempmat4 )
 
         ! find dNdy
         dNdy = 0.D0
@@ -320,9 +324,9 @@ subroutine fieldvars_hyperelast_3dbasic(lmn, element_identifier, n_nodes, node_p
                     F(ii,jj) = F(ii,jj) + total_dof(kk,ii)*dNdx(kk,jj)
                 end do
                 F(ii,jj) = F(ii,jj) + delta(ii,jj)
-                tempmat1(ii,jj) = 1.D0
-                tempmat1(ii+3,jj+3) = 0.5D0
             end do
+            tempmat1(ii,ii) = 1.D0
+            tempmat1(ii+3,ii+3) = 0.5D0
         enddo
 
         lB = matmul(F(1:3,1:3),transpose(F(1:3,1:3)))
@@ -335,7 +339,7 @@ subroutine fieldvars_hyperelast_3dbasic(lmn, element_identifier, n_nodes, node_p
         tempmat4 = spread(BVec,dim=2,ncopies=6)*spread(BVecInv,dim=1,ncopies=6)
         call invert_small(F,FInv,J)
         D = mu1*J**(-2.D0/3)*tempmat1 + K1*J*(J-0.5D0)*tempmat2
-        D = D + mu1*J**(-2.D0/3)*( (BVec(1)+BVec(2)+BVec(3))/3.D0*tempmat2 - tempmat3 - tempmat4 )/3.D0
+        D = D + mu1*J**(-2.D0/3)/3.D0*( (BVec(1)+BVec(2)+BVec(3))/3.D0*tempmat2 - tempmat3 - tempmat4 )
 
         ! find dNdy
         dNdy = 0.D0

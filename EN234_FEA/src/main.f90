@@ -70,10 +70,10 @@ program en234fea
 !
 ! Homework 6: small-strain Armstrong-Frederick kinematic hardening model
 
-  infil = './input_files/Hypo_elastic_3d.in'
-  open (unit = IOR, file = infil, status = 'old', ERR=500)
-  outfil = './Output_files/Hypo_elastic_3d.out'
-  open (UNIT = IOW, FILE = outfil, STATUS = 'unknown', ERR=500)
+!  infil = './input_files/Hypo_elastic_3d.in'
+!  open (unit = IOR, file = infil, status = 'old', ERR=500)
+!  outfil = './Output_files/Hypo_elastic_3d.out'
+!  open (UNIT = IOW, FILE = outfil, STATUS = 'unknown', ERR=500)
 
 !  infil = './input_files/cyclic_plastic_3d.in'
 !  open (unit = IOR, file = infil, status = 'old', ERR=500)
@@ -83,10 +83,10 @@ program en234fea
 
 
 ! Homework 7, stretch a hyperelastic bar, check stiffness.
-!  infil = './input_files/Hyperelastic_bar_stretch.in'
-!  open (unit = IOR, file = infil, status = 'old', ERR=500)
-!  outfil = './Output_files/hyperelastic_bar_stretch.out'
-!  open (UNIT = IOW, FILE = outfil, STATUS = 'unknown', ERR=500)
+  infil = './input_files/Hyperelastic_bar_stretch.in'
+  open (unit = IOR, file = infil, status = 'old', ERR=500)
+  outfil = './Output_files/hyperelastic_bar_stretch.out'
+  open (UNIT = IOW, FILE = outfil, STATUS = 'unknown', ERR=500)
 !!
 !!  Homework 7, stretch and rotate a hyperelastic bar
 !  infil = './input_files/Hyperelastic_stretch_rotate.in'

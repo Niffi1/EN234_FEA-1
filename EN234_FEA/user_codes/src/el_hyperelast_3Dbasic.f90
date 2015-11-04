@@ -60,14 +60,14 @@ subroutine el_hyperelast_3dbasic(lmn, element_identifier, n_nodes, node_property
     real (prec)  ::  D(6,6), G(6,9)                    ! stress = D*(strain+dstrain)  (NOTE FACTOR OF 2 in shear strain)
     real (prec)  ::  B(6,length_dof_array)             ! strain = B*(dof_total+dof_increment)
 
-    real (prec)  ::  F(3,3), lB(3,3), lBInv(3,3), rC(3,3), EGreen(3,3), FInv(3,3), Bstar(9,length_dof_array)
+    real (prec)  ::  F(3,3), lB(3,3), lBInv(3,3), rC(3,3), FInv(3,3), Bstar(9,length_dof_array)
     real (prec)  ::  total_dof(length_dof_array/3, 3), dNdy(1:n_nodes,1:3)
     real (prec)  ::  Pmat(length_dof_array,length_dof_array)
     real (prec)  ::  Smat(length_dof_array,length_dof_array), S(3,length_dof_array/3)
     real (prec)  ::  Sigma(length_dof_array,length_dof_array)
     real (prec)  ::  IVec(6), BVec(6), BVecInv(6), PVec(3*n_nodes), SVec(3*n_nodes)
     real (prec)  ::  tempmat1(6,6), tempmat2(6,6), tempmat3(6,6), tempmat4(6,6)
-    real (prec)  ::  tau(3,3)                           ! Kirchoff stress
+    real (prec)  ::  tau(3,3), EGreen(3,3), EEulerian(3,3)                           ! Kirchoff stress
     real (prec)  ::  delta(3,3)
 
     real (prec)  ::  dxidx(3,3), determinant, J, detB         ! Jacobian inverse and determinant
@@ -131,9 +131,9 @@ subroutine el_hyperelast_3dbasic(lmn, element_identifier, n_nodes, node_property
         tempmat3 = spread(IVec,dim=2,ncopies=6)*spread(IVec,dim=1,ncopies=6)
         tempmat4 = spread(BVec,dim=2,ncopies=6)*spread(BVecInv,dim=1,ncopies=6)
         call invert_small(F,FInv,J)
+        J = dsqrt(detB) ! Guarantee positive J
         D = mu1*J**(-2.D0/3)*tempmat1 + K1*J*(J-0.5D0)*tempmat2
         D = D + mu1*J**(-2.D0/3)/3.D0*( (BVec(1)+BVec(2)+BVec(3))/3.D0*tempmat2 - tempmat3 - tempmat4 )
-
         ! find dNdy
         dNdy = 0.D0
         do ii = 1, 3
@@ -142,12 +142,15 @@ subroutine el_hyperelast_3dbasic(lmn, element_identifier, n_nodes, node_property
             end do
         end do
         ! find Kirchoff stress and true stress
-        tau(1:3,1:3) = mu1*J**(-2.D0/3)*( lB(1:3,1:3)-(lB(1,1)+lB(2,2)+lB(3,3))*delta(1:3,1:3)/3.D0 ) + K1*J*(J-1)*delta(1:3,1:3)
+        tau(1:3,1:3) = mu1*J**(-2.D0/3)*(lB(1:3,1:3)-(lB(1,1)+lB(2,2)+lB(3,3))*delta(1:3,1:3)/3.D0) + K1*J*(J-1)*delta(1:3,1:3)
         stress(1:6) = (/ tau(1,1), tau(2,2), tau(3,3), tau(1,2), tau(1,3), tau(2,3) /)/J
-        ! find the lagrange strain
-        rC = matmul(transpose(F), F)
-        EGreen = 0.5D0*(rC - delta)
-        strain(1:6) = (/ EGreen(1,1), EGreen(2,2), EGreen(3,3), EGreen(1,2), EGreen(1,3), EGreen(2,3) /)
+
+        ! find the Lagrange/Eulerian strain
+!        rC = matmul(transpose(F), F)
+!        EGreen = 0.5D0*(rC - delta)
+!        strain(1:6) = (/ EGreen(1,1), EGreen(2,2), EGreen(3,3), EGreen(1,2), EGreen(1,3), EGreen(2,3) /)
+        EEulerian = 0.5D0*(delta - matmul(transpose(FInv),FInv))
+        strain(1:6) = (/ EEulerian(1,1), EEulerian(2,2), EEulerian(3,3), EEulerian(1,2), EEulerian(1,3), EEulerian(2,3) /)
 
         ! find G
         G = 0.D0
@@ -279,7 +282,7 @@ subroutine fieldvars_hyperelast_3dbasic(lmn, element_identifier, n_nodes, node_p
     real (prec)  ::  Sigma(length_dof_array,length_dof_array)
     real (prec)  ::  IVec(6), BVec(6), BVecInv(6), PVec(3*n_nodes), SVec(3*n_nodes)
     real (prec)  ::  tempmat1(6,6), tempmat2(6,6), tempmat3(6,6), tempmat4(6,6)
-    real (prec)  ::  tau(3,3), EGreen(3,3)              ! Kirchoff stress and Lagrange strain
+    real (prec)  ::  tau(3,3), EGreen(3,3), EEulerian(3,3)              ! Kirchoff stress and Lagrange strain
     real (prec)  ::  pstrain(3), pstress(3)             ! principle strain and stress
     real (prec)  ::  delta(3,3)
 
@@ -294,6 +297,7 @@ subroutine fieldvars_hyperelast_3dbasic(lmn, element_identifier, n_nodes, node_p
     !     element_properties(2)         bulk modulus
 
     x = reshape(element_coords,(/3,length_coord_array/3/))
+    total_dof = 0.D0
     total_dof = transpose( reshape( dof_total + dof_increment, (/ 3, length_coord_array/3 /) ) )
     delta = reshape((/ 1.D0, 0.D0, 0.D0, 0.D0, 1.D0, 0.D0, 0.D0, 0.D0, 1.D0 /), shape(delta))
 
@@ -338,6 +342,7 @@ subroutine fieldvars_hyperelast_3dbasic(lmn, element_identifier, n_nodes, node_p
         tempmat3 = spread(IVec,dim=2,ncopies=6)*spread(IVec,dim=1,ncopies=6)
         tempmat4 = spread(BVec,dim=2,ncopies=6)*spread(BVecInv,dim=1,ncopies=6)
         call invert_small(F,FInv,J)
+        J = dsqrt(detB) ! Guarantee positive J
         D = mu1*J**(-2.D0/3)*tempmat1 + K1*J*(J-0.5D0)*tempmat2
         D = D + mu1*J**(-2.D0/3)/3.D0*( (BVec(1)+BVec(2)+BVec(3))/3.D0*tempmat2 - tempmat3 - tempmat4 )
 
@@ -349,13 +354,15 @@ subroutine fieldvars_hyperelast_3dbasic(lmn, element_identifier, n_nodes, node_p
             end do
         end do
         ! find Kirchoff stress and true stress
-        tau(1:3,1:3) = mu1*J**(-2.D0/3)*( lB(1:3,1:3)-(lB(1,1)+lB(2,2)+lB(3,3))*delta(1:3,1:3)/3.D0 ) + K1*J*(J-1)*delta(1:3,1:3)
+        tau(1:3,1:3) = mu1*J**(-2.D0/3)*(lB(1:3,1:3)-(lB(1,1)+lB(2,2)+lB(3,3))*delta(1:3,1:3)/3.D0) + K1*J*(J-1)*delta(1:3,1:3)
         stress(1:6) = (/ tau(1,1), tau(2,2), tau(3,3), tau(1,2), tau(1,3), tau(2,3) /)/J
 
-        ! find the Lagrange strain
-        rC = matmul(transpose(F), F)
-        EGreen = 0.5D0*(rC - delta)
-        strain(1:6) = (/ EGreen(1,1), EGreen(2,2), EGreen(3,3), EGreen(1,2), EGreen(1,3), EGreen(2,3) /)
+        ! find the Lagrange/Eulerian strain
+!        rC = matmul(transpose(F), F)
+!        EGreen = 0.5D0*(rC - delta)
+!        strain(1:6) = (/ EGreen(1,1), EGreen(2,2), EGreen(3,3), EGreen(1,2), EGreen(1,3), EGreen(2,3) /)
+        EEulerian = 0.5D0*(delta - matmul(transpose(FInv),FInv))
+        strain(1:6) = (/ EEulerian(1,1), EEulerian(2,2), EEulerian(3,3), EEulerian(1,2), EEulerian(1,3), EEulerian(2,3) /)
 
         ! find principle stress and strain
         pstress = principalvals33(stress)
@@ -403,7 +410,7 @@ subroutine fieldvars_hyperelast_3dbasic(lmn, element_identifier, n_nodes, node_p
         end do
  
     end do
-  
+
     return
 end subroutine fieldvars_hyperelast_3dbasic
 

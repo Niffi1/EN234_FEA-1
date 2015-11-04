@@ -1,6 +1,6 @@
 %
 %             Demonstration input file for simple general purpose FEA code FEACHEAP
-%                                    A.F. Bower, August 2011
+%                                    A.F. Bower, August 2015
 %
 %             This example illustrates a simple 3D elastostatic boundary value problem with 8 noded brick elements
 %             The element subroutines are in el_linelast_3Dbasic.f90.
@@ -4131,7 +4131,7 @@ END NODES
 %     The parameters are no. nodes on the element, total no. state variables, integer identifier  
       ELEMENTS
 
-       PARAMETERS, 8, 0, 1002
+       PARAMETERS, 8, 0, 1005
 %       Define element properties - the values are passed to user subroutine elstif in the order they are listed here
 %       For the example provided, the params are Youngs Modulus, Poissons ratio and thermal expansion coeft
         PROPERTIES
@@ -7322,7 +7322,7 @@ END MESH
 
 %   The CHECK STIFFNESS key tests the element subroutine to ensure that
 %   the residual force vector is consistent with the stiffness
-%       CHECK STIFFNESS, 1001
+%       CHECK STIFFNESS, 1005
 
 %    STOP
 
@@ -7366,7 +7366,7 @@ END MESH
 
          PRINT STATE, Output_files\contourplots.dat
 %            DEGREES OF FREEDOM
-            FIELD VARIABLES, S11,S22,S33,S12,S13,S23
+            FIELD VARIABLES, S11,S22,S33,S12,S13,S23,PS1,PS2,PS3,E11,E22,E33,E12,E13,E23,PE1,PE2,PE3
             DISPLACED MESH
             DISPLACEMENT SCALE FACTOR, 1.d0
          END PRINT STATE

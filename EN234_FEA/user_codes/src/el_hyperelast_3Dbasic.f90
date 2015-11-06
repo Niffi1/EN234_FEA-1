@@ -162,7 +162,7 @@ subroutine el_hyperelast_3dbasic(lmn, element_identifier, n_nodes, node_property
                         2.D0*lB(1,3), 0.D0, 0.D0, 2.D0*lB(2,3), 2.D0*lB(3,3), 0.D0, &
                         0.D0, 0.D0, 2.D0*lB(1,3), 0.D0, 2.D0*lB(1,1), 2.D0*lB(1,2), &
                         0.D0, 2.D0*lB(2,3), 0.D0, 2.D0*lB(1,3), 0.D0, 2.D0*lB(3,3), &
-                        0.D0, 0.D0, 2.D0*lB(1,3), 0.D0, 2.D0*lB(1,2), 2.D0*lB(2,2) /), shape(G))
+                        0.D0, 0.D0, 2.D0*lB(2,3), 0.D0, 2.D0*lB(1,2), 2.D0*lB(2,2) /), shape(G))
         ! find B
         B = 0.D0
         B(1,1:3*n_nodes-2:3) = dNdy(1:n_nodes,1)

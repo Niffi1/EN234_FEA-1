@@ -1,7 +1,7 @@
 !     Subroutines for basic 3D hyperelastic elements
-!     element identifier == 1005
+!     element identifier == 1006
 !==========================SUBROUTINE el_hyperelast_3dbasic ==============================
-subroutine el_hyperelast_3dbasic(lmn, element_identifier, n_nodes, node_property_list, &           ! Input variables
+subroutine el_hyperelast_3dbasic_Bbar(lmn, element_identifier, n_nodes, node_property_list, &           ! Input variables
     n_properties, element_properties, element_coords, length_coord_array, &                      ! Input variables
     dof_increment, dof_total, length_dof_array, &                                                ! Input variables
     n_state_variables, initial_state_variables, &                                                ! Input variables
@@ -60,12 +60,12 @@ subroutine el_hyperelast_3dbasic(lmn, element_identifier, n_nodes, node_property
     real (prec)  ::  D(6,6), G(6,9)                    ! stress = D*(strain+dstrain)  (NOTE FACTOR OF 2 in shear strain)
     real (prec)  ::  B(6,length_dof_array)             ! strain = B*(dof_total+dof_increment)
 
-    real (prec)  ::  F(3,3), lB(3,3), lBInv(3,3), rC(3,3), FInv(3,3), Bstar(9,length_dof_array)
+    real (prec)  ::  F(3,3), Fbar(3,3), lB(3,3), lBInv(3,3), rC(3,3), FInv(3,3), Bstar(9,length_dof_array)
     real (prec)  ::  total_dof(length_dof_array/3, 3), dNdy(1:n_nodes,1:3)
-    real (prec)  ::  Pmat(length_dof_array,length_dof_array)
+    real (prec)  ::  Pmat(length_dof_array,length_dof_array), Qmat(length_dof_array,length_dof_array)
     real (prec)  ::  Smat(length_dof_array,length_dof_array), S(3,length_dof_array/3)
     real (prec)  ::  Sigma(length_dof_array,length_dof_array)
-    real (prec)  ::  IVec(6), BVec(6), BVecInv(6), PVec(3*n_nodes), SVec(3*n_nodes)
+    real (prec)  ::  IVec(6), BVec(6), BVecInv(6), PVec(3*n_nodes), SVec(3*n_nodes), QVec(3*n_nodes)
     real (prec)  ::  tempmat1(6,6), tempmat2(6,6), tempmat3(6,6), tempmat4(6,6)
     real (prec)  ::  tau(3,3), EGreen(3,3), EEulerian(3,3)                           ! Kirchoff stress
     real (prec)  ::  delta(3,3)
@@ -80,9 +80,16 @@ subroutine el_hyperelast_3dbasic(lmn, element_identifier, n_nodes, node_property
     !     element_properties(1)         shear modulus
     !     element_properties(2)         bulk modulus
 
+    ! for B-bar element
+    real (prec)  ::  el_vol, eta          ! element volume
+    real (prec)  ::  dNbardy(1:n_nodes,1:3), dNdyVec(3*n_nodes), dNbardyVec(3*n_nodes)
+    real (prec)  ::  B_bar(6,length_dof_array), tempmatrix1(6,length_dof_array), tempmatrix2(9,length_dof_array)
+    real (prec)  ::  tempmat5(3*n_nodes, 3*n_nodes), tempmat6(3*n_nodes, 3*n_nodes)
+    real (prec)  ::  tempmat7(3*n_nodes, 3*n_nodes), tempmat8(3*n_nodes, 3*n_nodes)
+
     fail = .false.
     
-    x = reshape(element_coords,(/3,length_coord_array/3/))
+    x = reshape(element_coords,(/3, length_coord_array/3/))
     total_dof = 0.D0
     total_dof = transpose( reshape( dof_total + dof_increment, (/ 3, length_coord_array/3 /) ) )
     delta = reshape((/ 1.D0, 0.D0, 0.D0, 0.D0, 1.D0, 0.D0, 0.D0, 0.D0, 1.D0 /), shape(delta))
@@ -97,6 +104,62 @@ subroutine el_hyperelast_3dbasic(lmn, element_identifier, n_nodes, node_property
 
     call initialize_integration_points(n_points, n_nodes, xi, w)
 
+    el_vol = 0.D0
+    eta = 0.D0
+    dNbardy = 0.D0
+    tempmat8 = 0.D0
+    do kint = 1, n_points
+        call calculate_shapefunctions(xi(1:3,kint),n_nodes,N,dNdxi)
+        dxdxi = matmul(x(1:3,1:n_nodes),dNdxi(1:n_nodes,1:3))
+        call invert_small(dxdxi,dxidx,determinant)
+        dNdx(1:n_nodes,1:3) = matmul(dNdxi(1:n_nodes,1:3),dxidx)
+
+        F = 0.D0
+        ! find deformation gradient F
+        do ii = 1, 3
+            do jj = 1, 3
+                do kk = 1, n_nodes
+                    F(ii,jj) = F(ii,jj) + total_dof(kk,ii)*dNdx(kk,jj)
+                end do
+                F(ii,jj) = F(ii,jj) + delta(ii,jj)
+            end do
+        enddo
+        ! find Finv
+        call invert_small(F,FInv,J)
+        ! find J
+        !J = dsqrt(J**2) ! Guarantee positive J
+        ! find dNdy
+        dNdy = 0.D0
+        do ii = 1, 3
+            do jj = 1, 3
+                dNdy(1:n_nodes,ii) = dNdy(1:n_nodes,ii) + dNdx(1:n_nodes,jj)*FInv(jj,ii)
+            end do
+        end do
+        ! find el_vol, eta
+        el_vol = el_vol + w(kint)*determinant
+        eta = eta + J*w(kint)*determinant
+        ! find dNbardy
+        dNbardy(1:n_nodes,1:3) = dNbardy(1:n_nodes,1:3) + J*dNdy(1:n_nodes,1:3)*w(kint)*determinant
+        ! find the integral part of P
+        tempmat5 = 0.D0
+        tempmat6 = 0.D0
+        dNdyVec(1:3*n_nodes) = reshape(transpose(dNdy(1:n_nodes,1:3)),(/3*n_nodes/))
+        tempmat5 = spread(dNdyVec,dim=2,ncopies=3*n_nodes)*spread(dNdyVec,dim=1,ncopies=3*n_nodes)
+        do i = 1,n_nodes
+            Qvec = reshape(spread(transpose(dNdy(i:i,1:3)),dim=2,ncopies=n_nodes),(/3*n_nodes/))
+            Qmat(3*i-2:3*i,1:3*n_nodes) = spread(Pvec,dim=1,ncopies=3)
+        end do
+        tempmat6 = Qmat*transpose(Qmat)
+        tempmat8 = tempmat8 + J*(tempmat5 - tempmat6)*w(kint)*determinant
+    end do
+    eta = eta/el_vol
+    tempmat8 = tempmat8/el_vol/eta
+    dNbardy = dNbardy/el_vol/eta
+    ! find P, constant in each element
+    dNbardyVec(1:3*n_nodes) = reshape(transpose(dNbardy(1:n_nodes,1:3)),(/3*n_nodes/))
+    tempmat7 = spread(dNbardyVec,dim=2,ncopies=3*n_nodes)*spread(dNbardyVec,dim=1,ncopies=3*n_nodes)
+    Pmat = tempmat8 - tempmat7
+
     element_residual = 0.d0
     element_stiffness = 0.d0
     do kint = 1, n_points
@@ -105,12 +168,8 @@ subroutine el_hyperelast_3dbasic(lmn, element_identifier, n_nodes, node_property
         call invert_small(dxdxi,dxidx,determinant)
         dNdx(1:n_nodes,1:3) = matmul(dNdxi(1:n_nodes,1:3),dxidx)
 
-        D = 0.d0
         F = 0.D0
         tempmat1 = 0.D0
-        tempmat2 = 0.D0
-        tempmat3 = 0.D0
-        tempmat4 = 0.D0
         ! find deformation gradient F
         do ii = 1, 3
             do jj = 1, 3
@@ -122,18 +181,15 @@ subroutine el_hyperelast_3dbasic(lmn, element_identifier, n_nodes, node_property
             tempmat1(ii,ii) = 1.D0
             tempmat1(ii+3,ii+3) = 0.5D0
         enddo
-        lB = matmul(F,transpose(F))
-        BVec = (/ lB(1,1), lB(2,2), lB(3,3), lB(1,2), lB(1,3), lB(2,3) /)
-        call invert_small(lB,lBInv,detB)
-        BVecInv = (/ lBInv(1,1), lBInv(2,2), lBInv(3,3), lBInv(1,2), lBInv(1,3), lBInv(2,3) /)
-        IVec = (/ 1.D0, 1.D0, 1.D0, 0.D0, 0.D0, 0.D0 /)
-        tempmat2 = spread(IVec,dim=2,ncopies=6)*spread(BVecInv,dim=1,ncopies=6)
-        tempmat3 = spread(IVec,dim=2,ncopies=6)*spread(IVec,dim=1,ncopies=6)
-        tempmat4 = spread(BVec,dim=2,ncopies=6)*spread(BVecInv,dim=1,ncopies=6)
+        ! find Finv, J
         call invert_small(F,FInv,J)
-        J = dsqrt(detB) ! Guarantee positive J
-        D = mu1*J**(-2.D0/3)*tempmat1 + K1*J*(J-0.5D0)*tempmat2
-        D = D + mu1*J**(-2.D0/3)/3.D0*( (BVec(1)+BVec(2)+BVec(3))/3.D0*tempmat2 - tempmat3 - tempmat4 )
+        !J = dsqrt(J**2) ! Guarantee positive J
+        ! find the Lagrange/Eulerian strain
+!        rC = matmul(transpose(F), F)
+!        EGreen = 0.5D0*(rC - delta)
+!        strain(1:6) = (/ EGreen(1,1), EGreen(2,2), EGreen(3,3), EGreen(1,2), EGreen(1,3), EGreen(2,3) /)
+        EEulerian = 0.5D0*(delta - matmul(transpose(FInv),FInv))
+        strain(1:6) = (/ EEulerian(1,1), EEulerian(2,2), EEulerian(3,3), EEulerian(1,2), EEulerian(1,3), EEulerian(2,3) /)
         ! find dNdy
         dNdy = 0.D0
         do ii = 1, 3
@@ -141,17 +197,27 @@ subroutine el_hyperelast_3dbasic(lmn, element_identifier, n_nodes, node_property
                 dNdy(1:n_nodes,ii) = dNdy(1:n_nodes,ii) + dNdx(1:n_nodes,jj)*FInv(jj,ii)
             end do
         end do
+        ! find Fbar
+        Fbar = (eta/J)**(1.D0/3.D0)*F
+        call invert_small(Fbar,FInv,J)
+        ! find left Cauchy-Green tensor using Fbar
+        lB = matmul(Fbar,transpose(Fbar))
+        call invert_small(lB,lBInv,detB)
+        BVec = (/ lB(1,1), lB(2,2), lB(3,3), lB(1,2), lB(1,3), lB(2,3) /)
+        BVecInv = (/ lBInv(1,1), lBInv(2,2), lBInv(3,3), lBInv(1,2), lBInv(1,3), lBInv(2,3) /)
+        IVec = (/ 1.D0, 1.D0, 1.D0, 0.D0, 0.D0, 0.D0 /)
+        tempmat2 = spread(IVec,dim=2,ncopies=6)*spread(BVecInv,dim=1,ncopies=6)
+        tempmat3 = spread(IVec,dim=2,ncopies=6)*spread(IVec,dim=1,ncopies=6)
+        tempmat4 = spread(BVec,dim=2,ncopies=6)*spread(BVecInv,dim=1,ncopies=6)
         ! find Kirchoff stress and true stress
-        tau(1:3,1:3) = mu1*J**(-2.D0/3)*(lB(1:3,1:3)-(lB(1,1)+lB(2,2)+lB(3,3))*delta(1:3,1:3)/3.D0) + K1*J*(J-1)*delta(1:3,1:3)
+        tau = 0.D0
+        tau(1:3,1:3) = mu1*J**(-2.D0/3.D0)*(lB(1:3,1:3)-(lB(1,1)+lB(2,2)+lB(3,3))/3.D0*delta(1:3,1:3)) &
+                        + K1*J*(J-1.D0)*delta(1:3,1:3)
         stress(1:6) = (/ tau(1,1), tau(2,2), tau(3,3), tau(1,2), tau(1,3), tau(2,3) /)/J
-
-        ! find the Lagrange/Eulerian strain
-!        rC = matmul(transpose(F), F)
-!        EGreen = 0.5D0*(rC - delta)
-!        strain(1:6) = (/ EGreen(1,1), EGreen(2,2), EGreen(3,3), EGreen(1,2), EGreen(1,3), EGreen(2,3) /)
-        EEulerian = 0.5D0*(delta - matmul(transpose(FInv),FInv))
-        strain(1:6) = (/ EEulerian(1,1), EEulerian(2,2), EEulerian(3,3), EEulerian(1,2), EEulerian(1,3), EEulerian(2,3) /)
-
+        ! find D
+        D = 0.D0
+        D = mu1*J**(-2.D0/3)*tempmat1 + K1*J*(J-0.5D0)*tempmat2 &
+            + mu1*J**(-2.D0/3.D0)/3.D0*( (BVec(1)+BVec(2)+BVec(3))/3.D0*tempmat2 - tempmat3 - tempmat4 )
         ! find G
         G = 0.D0
         G = reshape( (/ 2.D0*lB(1,1), 0.D0, 0.D0, 2.D0*lB(1,2), 2.D0*lB(1,3), 0.D0, &
@@ -174,7 +240,19 @@ subroutine el_hyperelast_3dbasic(lmn, element_identifier, n_nodes, node_property
         B(5,3:3*n_nodes:3)   = dNdy(1:n_nodes,1)
         B(6,2:3*n_nodes-1:3) = dNdy(1:n_nodes,3)
         B(6,3:3*n_nodes:3)   = dNdy(1:n_nodes,2)
-
+        ! find Bbar
+        tempmatrix1 = 0.D0
+        tempmatrix2 = 0.D0
+        B_bar = 0.D0
+        do ii = 1, n_nodes
+            tempmatrix1(1:3,3*ii-2) = dNbardy(ii,1) - dNdy(ii,1)
+            tempmatrix1(1:3,3*ii-1) = dNbardy(ii,2) - dNdy(ii,2)
+            tempmatrix1(1:3,3*ii-0) = dNbardy(ii,3) - dNdy(ii,3)
+            tempmatrix2(1:3,3*ii-2) = dNbardy(ii,1) - dNdy(ii,1)
+            tempmatrix2(1:3,3*ii-1) = dNbardy(ii,2) - dNdy(ii,2)
+            tempmatrix2(1:3,3*ii-0) = dNbardy(ii,3) - dNdy(ii,3)
+        end do
+        B_bar = B + 1.D0/3.D0*tempmatrix1
         ! find Bstar
         Bstar = 0.D0
         Bstar(1,1:3*n_nodes-2:3) = dNdy(1:n_nodes,1)
@@ -186,32 +264,36 @@ subroutine el_hyperelast_3dbasic(lmn, element_identifier, n_nodes, node_property
         Bstar(7,3:3*n_nodes-0:3) = dNdy(1:n_nodes,1)
         Bstar(8,2:3*n_nodes-1:3) = dNdy(1:n_nodes,3)
         Bstar(9,3:3*n_nodes-0:3) = dNdy(1:n_nodes,2)
-
-        ! find Sigma
+        Bstar = Bstar + 1.D0/3.D0*tempmatrix2
+        ! find Q and Sigma
+        Qmat = 0.D0
+        Sigma = 0.D0
         S = reshape(matmul(transpose(B),stress*J),(/3,length_dof_array/3/))
         do i = 1,n_nodes
-            PVec = reshape(spread(transpose(dNdy(i:i,1:3)),dim=2,ncopies=n_nodes),(/3*n_nodes/))
-            Pmat(3*i-2:3*i,1:3*n_nodes) = spread(PVec,dim=1,ncopies=3)
+            QVec = reshape(spread(transpose(dNdy(i:i,1:3)),dim=2,ncopies=n_nodes),(/3*n_nodes/))
+            Qmat(3*i-2:3*i,1:3*n_nodes) = spread(QVec,dim=1,ncopies=3)
             SVec = reshape(spread(S(1:3,i:i),dim=2,ncopies=n_nodes),(/3*n_nodes/))
             Smat(3*i-2:3*i,1:3*n_nodes) = spread(SVec,dim=1,ncopies=3)
         end do
-        Sigma = Pmat*transpose(Smat)
+        Sigma = Qmat*transpose(Smat)
+        Qmat = Qmat*transpose(Qmat)
 
-        element_residual(1:3*n_nodes) = element_residual(1:3*n_nodes) - matmul(transpose(B),stress*J)*w(kint)*determinant
+        element_residual(1:3*n_nodes) = element_residual(1:3*n_nodes) - matmul(transpose(B_bar),stress*J)*w(kint)*determinant
         element_stiffness(1:3*n_nodes,1:3*n_nodes) = element_stiffness(1:3*n_nodes,1:3*n_nodes) &
-            + matmul( transpose(B(1:6,1:3*n_nodes)), matmul( D(1:6,1:6), &
-                        matmul( G(1:6,1:9), Bstar(1:9,1:3*n_nodes) ) ) )*w(kint)*determinant &
-            - Sigma(1:3*n_nodes,1:3*n_nodes)*w(kint)*determinant
+            + matmul( transpose(B_bar(1:6,1:3*n_nodes)), matmul( D(1:6,1:6), &
+                         matmul( G(1:6,1:9), Bstar(1:9,1:3*n_nodes) ) ) )*w(kint)*determinant &
+            + ( (tau(1,1)+tau(2,2)+tau(3,3))/3.D0*(Pmat(1:3*n_nodes,1:3*n_nodes)+Qmat(1:3*n_nodes,1:3*n_nodes)) &
+                    - Sigma(1:3*n_nodes,1:3*n_nodes) )*w(kint)*determinant
 
     end do
 
     return
-end subroutine el_hyperelast_3dbasic
+end subroutine el_hyperelast_3dbasic_Bbar
 
 
 
 !==========================SUBROUTINE fieldvars_hyperelast_3dbasic ==============================
-subroutine fieldvars_hyperelast_3dbasic(lmn, element_identifier, n_nodes, node_property_list, &           ! Input variables
+subroutine fieldvars_hyperelast_3dbasic_Bbar(lmn, element_identifier, n_nodes, node_property_list, &           ! Input variables
     n_properties, element_properties,element_coords,length_coord_array, &                                ! Input variables
     dof_increment, dof_total, length_dof_array,  &                                                      ! Input variables
     n_state_variables, initial_state_variables,updated_state_variables, &                               ! Input variables
@@ -223,7 +305,6 @@ subroutine fieldvars_hyperelast_3dbasic(lmn, element_identifier, n_nodes, node_p
     use Element_Utilities, only : N => shape_functions_3D
     use Element_Utilities, only : dNdxi => shape_function_derivatives_3D
     use Element_Utilities, only : dNdx => shape_function_spatial_derivatives_3D
-    use Element_Utilities, only : dNbardx => vol_avg_shape_function_derivatives_3D
     use Element_Utilities, only : xi => integrationpoints_3D, w => integrationweights_3D
     use Element_Utilities, only : dxdxi => jacobian_3D
     use Element_Utilities, only : initialize_integration_points
@@ -275,14 +356,11 @@ subroutine fieldvars_hyperelast_3dbasic(lmn, element_identifier, n_nodes, node_p
     real (prec)  ::  D(6,6), G(6,9)                    ! stress = D*(strain+dstrain)  (NOTE FACTOR OF 2 in shear strain)
     real (prec)  ::  B(6,length_dof_array)             ! strain = B*(dof_total+dof_increment)
 
-    real (prec)  ::  F(3,3), lB(3,3), lBInv(3,3), rC(3,3), FInv(3,3), Bstar(9,length_dof_array)
-    real (prec)  ::  total_dof(length_dof_array/3,3), dNdy(1:n_nodes,1:3)
-    real (prec)  ::  Pmat(length_dof_array,length_dof_array)
-    real (prec)  ::  Smat(length_dof_array,length_dof_array), S(3,length_dof_array/3)
-    real (prec)  ::  Sigma(length_dof_array,length_dof_array)
-    real (prec)  ::  IVec(6), BVec(6), BVecInv(6), PVec(3*n_nodes), SVec(3*n_nodes)
+    real (prec)  ::  F(3,3), Fbar(3,3), lB(3,3), lBInv(3,3), rC(3,3), FInv(3,3)
+    real (prec)  ::  total_dof(length_dof_array/3, 3)
+    real (prec)  ::  IVec(6), BVec(6), BVecInv(6)
     real (prec)  ::  tempmat1(6,6), tempmat2(6,6), tempmat3(6,6), tempmat4(6,6)
-    real (prec)  ::  tau(3,3), EGreen(3,3), EEulerian(3,3)              ! Kirchoff stress and Lagrange strain
+    real (prec)  ::  tau(3,3), EGreen(3,3), EEulerian(3,3)                           ! Kirchoff stress
     real (prec)  ::  pstrain(3), pstress(3)             ! principle strain and stress
     real (prec)  ::  delta(3,3)
 
@@ -295,6 +373,9 @@ subroutine fieldvars_hyperelast_3dbasic(lmn, element_identifier, n_nodes, node_p
 
     !     element_properties(1)         shear modulus
     !     element_properties(2)         bulk modulus
+
+    ! for B-bar element
+    real (prec)  ::  el_vol, eta          ! element volume
 
     x = reshape(element_coords,(/3,length_coord_array/3/))
     total_dof = 0.D0
@@ -313,14 +394,41 @@ subroutine fieldvars_hyperelast_3dbasic(lmn, element_identifier, n_nodes, node_p
 
     nodal_fieldvariables = 0.d0
 
+    el_vol = 0.D0
+    eta = 0.D0
     do kint = 1, n_points
         call calculate_shapefunctions(xi(1:3,kint),n_nodes,N,dNdxi)
         dxdxi = matmul(x(1:3,1:n_nodes),dNdxi(1:n_nodes,1:3))
         call invert_small(dxdxi,dxidx,determinant)
         dNdx(1:n_nodes,1:3) = matmul(dNdxi(1:n_nodes,1:3),dxidx)
 
-        D = 0.d0
         F = 0.D0
+        ! find deformation gradient F
+        do ii = 1, 3
+            do jj = 1, 3
+                do kk = 1, n_nodes
+                    F(ii,jj) = F(ii,jj) + total_dof(kk,ii)*dNdx(kk,jj)
+                end do
+                F(ii,jj) = F(ii,jj) + delta(ii,jj)
+            end do
+        enddo
+        ! find J
+        call invert_small(F,FInv,J)
+        J = dsqrt(J**2) ! Guarantee positive J
+        ! find el_vol, eta
+        el_vol = el_vol + w(kint)*determinant
+        eta = eta + J*w(kint)*determinant
+    end do
+    eta = eta/el_vol
+
+    do kint = 1, n_points
+        call calculate_shapefunctions(xi(1:3,kint),n_nodes,N,dNdxi)
+        dxdxi = matmul(x(1:3,1:n_nodes),dNdxi(1:n_nodes,1:3))
+        call invert_small(dxdxi,dxidx,determinant)
+        dNdx(1:n_nodes,1:3) = matmul(dNdxi(1:n_nodes,1:3),dxidx)
+
+        F = 0.D0
+        tempmat1 = 0.D0
         ! find deformation gradient F
         do ii = 1, 3
             do jj = 1, 3
@@ -332,37 +440,34 @@ subroutine fieldvars_hyperelast_3dbasic(lmn, element_identifier, n_nodes, node_p
             tempmat1(ii,ii) = 1.D0
             tempmat1(ii+3,ii+3) = 0.5D0
         enddo
-
-        lB = matmul(F(1:3,1:3),transpose(F(1:3,1:3)))
-        BVec = (/ lB(1,1), lB(2,2), lB(3,3), lB(1,2), lB(1,3), lB(2,3) /)
-        call invert_small(lB,lBInv,detB)
-        BVecInv = (/ lBInv(1,1), lBInv(2,2), lBInv(3,3), lBInv(1,2), lBInv(1,3), lBInv(2,3) /)
-        IVec = (/ 1.D0, 1.D0, 1.D0, 0.D0, 0.D0, 0.D0 /)
-        tempmat2 = spread(IVec,dim=2,ncopies=6)*spread(BVecInv,dim=1,ncopies=6)
-        tempmat3 = spread(IVec,dim=2,ncopies=6)*spread(IVec,dim=1,ncopies=6)
-        tempmat4 = spread(BVec,dim=2,ncopies=6)*spread(BVecInv,dim=1,ncopies=6)
+        ! find Finv, J
         call invert_small(F,FInv,J)
-        J = dsqrt(detB) ! Guarantee positive J
-        D = mu1*J**(-2.D0/3)*tempmat1 + K1*J*(J-0.5D0)*tempmat2
-        D = D + mu1*J**(-2.D0/3)/3.D0*( (BVec(1)+BVec(2)+BVec(3))/3.D0*tempmat2 - tempmat3 - tempmat4 )
-
-        ! find dNdy
-        dNdy = 0.D0
-        do ii = 1, 3
-            do jj = 1, 3
-                dNdy(1:n_nodes,ii) = dNdy(1:n_nodes,ii) + dNdx(1:n_nodes,jj)*FInv(jj,ii)
-            end do
-        end do
-        ! find Kirchoff stress and true stress
-        tau(1:3,1:3) = mu1*J**(-2.D0/3)*(lB(1:3,1:3)-(lB(1,1)+lB(2,2)+lB(3,3))*delta(1:3,1:3)/3.D0) + K1*J*(J-1)*delta(1:3,1:3)
-        stress(1:6) = (/ tau(1,1), tau(2,2), tau(3,3), tau(1,2), tau(1,3), tau(2,3) /)/J
-
+        J = dsqrt(J**2) ! Guarantee positive J
         ! find the Lagrange/Eulerian strain
 !        rC = matmul(transpose(F), F)
 !        EGreen = 0.5D0*(rC - delta)
 !        strain(1:6) = (/ EGreen(1,1), EGreen(2,2), EGreen(3,3), EGreen(1,2), EGreen(1,3), EGreen(2,3) /)
         EEulerian = 0.5D0*(delta - matmul(transpose(FInv),FInv))
         strain(1:6) = (/ EEulerian(1,1), EEulerian(2,2), EEulerian(3,3), EEulerian(1,2), EEulerian(1,3), EEulerian(2,3) /)
+        ! find Fbar
+        Fbar = (eta/J)**(1.D0/3)*F
+        ! find left Cauchy-Green tensor using Fbar
+        lB = matmul(Fbar,transpose(Fbar))
+        call invert_small(lB,lBInv,detB)
+        BVec = (/ lB(1,1), lB(2,2), lB(3,3), lB(1,2), lB(1,3), lB(2,3) /)
+        BVecInv = (/ lBInv(1,1), lBInv(2,2), lBInv(3,3), lBInv(1,2), lBInv(1,3), lBInv(2,3) /)
+        IVec = (/ 1.D0, 1.D0, 1.D0, 0.D0, 0.D0, 0.D0 /)
+        tempmat2 = spread(IVec,dim=2,ncopies=6)*spread(BVecInv,dim=1,ncopies=6)
+        tempmat3 = spread(IVec,dim=2,ncopies=6)*spread(IVec,dim=1,ncopies=6)
+        tempmat4 = spread(BVec,dim=2,ncopies=6)*spread(BVecInv,dim=1,ncopies=6)
+        ! find D
+        D = 0.D0
+        D = mu1*eta**(-2.D0/3)*tempmat1 + K1*eta*(eta-0.5D0)*tempmat2 &
+             + mu1*eta**(-2.D0/3)/3.D0*( (BVec(1)+BVec(2)+BVec(3))/3.D0*tempmat2 - tempmat3 - tempmat4 )
+        ! find Kirchoff stress and true stress
+        tau(1:3,1:3) = mu1*eta**(-2.D0/3)*(lB(1:3,1:3)-(lB(1,1)+lB(2,2)+lB(3,3))*delta(1:3,1:3)/3.D0) &
+                        + K1*eta*(eta-1.D0)*delta(1:3,1:3)
+        stress(1:6) = (/ tau(1,1), tau(2,2), tau(3,3), tau(1,2), tau(1,3), tau(2,3) /)/eta
 
         ! find principle stress and strain
         pstress = principalvals33(stress)
@@ -412,5 +517,5 @@ subroutine fieldvars_hyperelast_3dbasic(lmn, element_identifier, n_nodes, node_p
     end do
 
     return
-end subroutine fieldvars_hyperelast_3dbasic
+end subroutine fieldvars_hyperelast_3dbasic_Bbar
 

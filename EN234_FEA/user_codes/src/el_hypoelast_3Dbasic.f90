@@ -340,12 +340,15 @@ end subroutine fieldvars_hypoelast_3dbasic
 
 !==========================SUBROUTINE mat_stiffness_3d ==============================
 subroutine mat_stiffness_3d(s0, e0, n0, K0, strain, stress, D)
-    real (kind=8) ::  s0, e0, n0,K0                      ! Material properties
-    real (kind=8) ::  strain(6), dev_strain(6)           ! Strain vector contains [e11, e22, e33, 2e12, 2e13, 2e23]
-    real (kind=8) ::  stress(6)                          ! Stress vector contains [s11, s22, s33, s12, s13, s23]
-    real (kind=8) ::  D(6,6)                             ! the material tangent stiffness matrix
-    real (kind=8) ::  e_dyadic_e(6,6), mat1(6,6), mat2(6,6)
-    real (kind=8) ::  se, ee, Et, Es, e_kk, e_mag
+    use Types
+    use ParamIO
+    implicit none
+    real (prec) ::  s0, e0, n0,K0                      ! Material properties
+    real (prec) ::  strain(6), dev_strain(6)           ! Strain vector contains [e11, e22, e33, 2e12, 2e13, 2e23]
+    real (prec) ::  stress(6)                          ! Stress vector contains [s11, s22, s33, s12, s13, s23]
+    real (prec) ::  D(6,6)                             ! the material tangent stiffness matrix
+    real (prec) ::  e_dyadic_e(6,6), mat1(6,6), mat2(6,6)
+    real (prec) ::  se, ee, Et, Es, e_kk, e_mag
     integer ::  i, j
 
     ! variable initiation
